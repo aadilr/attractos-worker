@@ -1,8 +1,9 @@
 /**
- * AttractOS Worker - AI Bot Traffic Tracker
+ * AttractOS Worker - AI Bot & Referral Tracker
  *
- * This Worker tracks AI bot visits to your site and optionally
- * injects a badge for free tier users.
+ * This Worker tracks:
+ * 1. AI bot visits (GPTBot, ClaudeBot, etc.)
+ * 2. AI referrals (humans clicking links from ChatGPT, Claude, etc.)
  *
  * Deploy via: https://deploy.workers.cloudflare.com
  */
@@ -104,6 +105,26 @@ const AI_BOTS: Record<string, { name: string; company: string }> = {
 const STATIC_ASSET_PATTERN =
   /\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|webp|avif|mp4|mp3|webm|pdf|zip|tar|gz)$/i;
 
+// AI referrer patterns - detect humans clicking links from AI chat interfaces
+const AI_REFERRERS: Record<string, string> = {
+  "chat.openai.com": "chatgpt",
+  "chatgpt.com": "chatgpt",
+  "openai.com": "chatgpt",
+  "claude.ai": "claude",
+  "anthropic.com": "claude",
+  "perplexity.ai": "perplexity",
+  "gemini.google.com": "gemini",
+  "bard.google.com": "gemini",
+  "copilot.microsoft.com": "copilot",
+  "meta.ai": "meta-ai",
+  "grok.x.ai": "grok",
+  "you.com": "you",
+  "phind.com": "phind",
+  "kagi.com": "kagi",
+  "search.brave.com": "brave-leo",
+  "duckduckgo.com": "duckduckgo-ai",
+};
+
 // Badge HTML - injected for free tier
 const BADGE_HTML = `
 <a href="https://attractos.com?ref=badge"
@@ -132,6 +153,34 @@ function detectBot(
     if (ua.includes(pattern.toLowerCase())) {
       return info;
     }
+  }
+
+  return null;
+}
+
+/**
+ * Detect AI referral from Referer header
+ */
+function detectAIReferral(referer: string): string | null {
+  if (!referer) return null;
+
+  try {
+    const url = new URL(referer);
+    const hostname = url.hostname.toLowerCase();
+
+    // Check hostname patterns
+    for (const [pattern, source] of Object.entries(AI_REFERRERS)) {
+      if (hostname.includes(pattern)) {
+        return source;
+      }
+    }
+
+    // Special case: bing.com/chat
+    if (hostname.includes("bing.com") && url.pathname.startsWith("/chat")) {
+      return "copilot";
+    }
+  } catch {
+    // Invalid URL
   }
 
   return null;
@@ -169,6 +218,32 @@ async function trackBot(
 }
 
 /**
+ * Track AI referral to AttractOS
+ */
+async function trackReferral(
+  key: string,
+  path: string,
+  llmSource: string,
+  cf: IncomingRequestCfProperties | undefined
+): Promise<void> {
+  try {
+    await fetch("https://attractos.com/api/t", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        t: "referral",
+        k: key,
+        p: path,
+        s: llmSource, // LLM source (chatgpt, claude, perplexity, etc.)
+        country: cf?.country,
+      }),
+    });
+  } catch {
+    // Fail silently - don't break the site for tracking errors
+  }
+}
+
+/**
  * Verify Worker deployment with AttractOS
  */
 async function verifyDeployment(key: string, domain: string): Promise<void> {
@@ -195,6 +270,7 @@ export default {
   ): Promise<Response> {
     const url = new URL(request.url);
     const ua = request.headers.get("user-agent") || "";
+    const referer = request.headers.get("referer") || "";
     const cf = request.cf as IncomingRequestCfProperties | undefined;
 
     // Skip static assets
@@ -205,9 +281,15 @@ export default {
     // Detect bot
     const bot = detectBot(ua);
 
-    // Track bot visit (non-blocking)
     if (bot && env.ATTRACTOS_KEY) {
+      // Track bot visit (non-blocking)
       ctx.waitUntil(trackBot(env.ATTRACTOS_KEY, url.pathname, ua, bot, cf));
+    } else if (env.ATTRACTOS_KEY && referer) {
+      // Not a bot - check for AI referral (human clicking link from ChatGPT, etc.)
+      const llmSource = detectAIReferral(referer);
+      if (llmSource) {
+        ctx.waitUntil(trackReferral(env.ATTRACTOS_KEY, url.pathname, llmSource, cf));
+      }
     }
 
     // Verify deployment on first request (one-time, non-blocking)
