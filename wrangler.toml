@@ -5,13 +5,5 @@ name = "attractos-tracker"
 main = "src/index.ts"
 compatibility_date = "2024-01-01"
 
-# Required: Set your AttractOS site key
-# Get yours at: https://attractos.com/dashboard/settings
 [vars]
 ATTRACTOS_PLAN = "free"
-# ATTRACTOS_KEY is set during deployment via deploy button
-
-# Routes - uncomment and configure for your domain
-# [[routes]]
-# pattern = "yourdomain.com/*"
-# zone_name = "yourdomain.com"
