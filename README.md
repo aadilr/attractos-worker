@@ -2,7 +2,7 @@
 
 Track AI bot visits to your website with zero code changes.
 
-[![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/AadilRazvi/attractos-worker)
+[![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/aadilr/attractos-worker)
 
 ## What This Does
 
@@ -26,7 +26,7 @@ This Cloudflare Worker intercepts requests to your site and:
 
 ```bash
 # Clone this repo
-git clone https://github.com/AadilRazvi/attractos-worker.git
+git clone https://github.com/aadilr/attractos-worker.git
 cd attractos-worker
 
 # Install dependencies
